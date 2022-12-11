@@ -3,7 +3,7 @@
 exit_code=1
 stage_log_file="last_stage_log"
 log_file="last_log"
-task="biginteger"
+task="matrix"
 
 
 echo "" > $log_file

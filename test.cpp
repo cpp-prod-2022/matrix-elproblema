@@ -11,15 +11,113 @@ using testing::make_pretty_test;
 using testing::TestGroup;
 
 
-template<typename T>
-concept IMatrix = requires(T matrix) {
+template<typename T, typename U>
+concept CanMultiply = requires(T first, U second) {
+    {first * second};
+};
 
+template<typename T, typename U, typename R>
+concept MultiplicationResult = requires(T first, U second) {
+    {first * second} -> std::same_as<R>;
+};
+
+template<typename T, typename U>
+concept CanAdd = requires(T first, U second) {
+    {first + second};
+    {first += second};
+};
+
+template<typename T, typename U>
+concept CanSubtract = requires(T first, U second) {
+    {first - second};
+    {first -= second};
+};
+
+template<typename T, typename U, typename R>
+concept SubtractionResult = CanSubtract<T, U> && requires(T first, U second) {
+    {first - second} -> std::same_as<R>;
 };
 
 TestGroup all_tests[] = {
-    {"Arithmetic",
-        make_pretty_test("static tests", [](auto& test) {
-               
+    {"Matrix",
+        make_pretty_test("static checks", [](auto& test) {
+            using M12 = Matrix<1, 2, size_t>;
+            using M21 = Matrix<2, 1, size_t>;
+            using M22 = Matrix<2, 2, size_t>;
+            using M11 = Matrix<1, 1, size_t>;
+
+            test.check(std::same_as<M11, SquareMatrix<1, size_t>>);
+            test.check(std::same_as<Matrix<2, 2>, SquareMatrix<2>>);
+
+            // Old way of doing such checks:
+            // std::is_same_v<decltype(std::declval<M12>() * std::declval<M21>()), M11>;
+
+            test.check(MultiplicationResult<M12, M21, M11>);
+            test.check(MultiplicationResult<M21, M12, M22>);
+            test.check(MultiplicationResult<M11, M11, M11>);
+            test.check(MultiplicationResult<M22, M22, M22>);
+            test.check(requires(M11 matrix) {
+                {matrix *= matrix} -> std::same_as<M11&>;       
+            });
+
+            test.check(!CanMultiply<M12, M12>);
+            test.check(!CanMultiply<M21, M21>);
+            
+            // In other form to show off requires expression
+            test.check(requires(M12 m12, M21 m21, M11 m11, M22 m22) {
+                {m12 + m12} -> std::same_as<M12>;
+                {m12 += m12} -> std::same_as<M12&>;
+                {m21 + m21} -> std::same_as<M21>;
+                {m21 += m21} -> std::same_as<M21&>;
+                {m11 + m11} -> std::same_as<M11>;
+                {m11 += m11} -> std::same_as<M11&>;
+                {m22 + m22} -> std::same_as<M22>;
+                {m22 += m22} -> std::same_as<M22&>;
+            });
+
+            test.check(!CanAdd<M12, M11>);
+            test.check(!CanAdd<M12, M21>);
+            test.check(!CanAdd<M11, M22>);
+
+            test.check(SubtractionResult<M12, M12, M12>);
+            test.check(SubtractionResult<M21, M21, M21>);
+            test.check(SubtractionResult<M11, M11, M11>);
+            test.check(SubtractionResult<M22, M22, M22>);
+
+            test.check(!CanSubtract<M12, M11>);
+            test.check(!CanSubtract<M12, M21>);
+            test.check(!CanSubtract<M11, M22>);
+        }),
+
+        make_pretty_test("operations", [](auto& test) {
+            using field_t = int;
+            SquareMatrix<3, field_t> matrix = {
+                {1, 2, 3},
+                {4, 5, 6},
+                {7, 8, 9}
+            };
+
+            test.equals(matrix.det(), field_t(0));
+            
+            {
+                auto transposed = matrix.transposed();
+                for (size_t i = 0; i < 3; ++i) {
+                    for (size_t j = 0; j < 3; ++j) {
+                        test.equals(transposed[i][j], matrix[j][i]);
+                    }
+                }
+            }
+            
+            test.equals(matrix.rank(),  size_t(2));
+            test.equals(matrix.trace(), field_t(15));
+            
+            auto&& row = matrix.getRow(1);
+            field_t row_true[] = {4, 5, 6};
+            test.check(std::equal(row.begin(), row.end(), row_true));
+
+            auto&& col = matrix.getColumn(1);
+            field_t col_true[] = {2, 5, 8};
+            test.check(std::equal(col.begin(), col.end(), col_true));
         })
     }
 };

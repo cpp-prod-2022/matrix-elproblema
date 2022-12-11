@@ -6,7 +6,7 @@ if [ ! -d "./build" ]; then
     mkdir build
 fi
 
-if cmake -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER_ADDRESS=True $@; then
+if cmake -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER_ADDRESS=True -DENABLE_SANITIZER_UNDEFINED_BEHAVIOR=True $@; then
 echo "calling make...";
 else 
 echo "CMake failed!";

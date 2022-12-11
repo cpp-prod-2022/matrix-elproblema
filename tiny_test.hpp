@@ -16,7 +16,33 @@
 #endif
 
 
+template <typename T>
+constexpr auto type_name() {
+    std::string_view name, prefix, suffix;
+#ifdef __clang__
+    name = __PRETTY_FUNCTION__;
+    prefix = "auto type_name() [T = ";
+    suffix = "]";
+#elif defined(__GNUC__)
+    name = __PRETTY_FUNCTION__;
+    prefix = "constexpr auto type_name() [with T = ";
+    suffix = "]";
+#elif defined(_MSC_VER)
+    name = __FUNCSIG__;
+    prefix = "auto __cdecl type_name<";
+    suffix = ">(void)";
+#endif
+    name.remove_prefix(prefix.size());
+    name.remove_suffix(suffix.size());
+    return name;
+}
+
 namespace testing {
+    template<typename T>
+    concept Printable = requires(T item) {
+        { std::cout << item };
+    };
+
     
     class Test {
     public:
@@ -92,6 +118,27 @@ namespace testing {
             return condition;
         }
 
+        template<typename First, typename Second>
+        requires Printable<First> && Printable<Second>
+        bool equals(
+                First& first,
+                Second&& second,
+                const std::source_location location = std::source_location::current()) {
+            const bool result = check(first == second, location);
+            if (!result) {
+                std::cout << first << " (" << type_name<First>() << ") != " 
+                    << second << " (" <<  type_name<Second>() << ")\n";
+            }
+            return result;
+        }
+
+        bool equals(
+                auto&& first,
+                auto&& second,
+                const std::source_location location = std::source_location::current()) {
+            return check(first == second, location);
+        }
+
         bool fail(const std::source_location location = std::source_location::current()) {
             return check(false, location);
         }
@@ -103,6 +150,10 @@ namespace testing {
 
         bool fail() {
             return check(false);
+        }
+
+        bool equals(auto&& first, auto&& second) {
+            return check(first == second);
         }
 #endif
 
