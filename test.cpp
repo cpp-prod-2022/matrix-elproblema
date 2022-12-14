@@ -11,6 +11,7 @@
 using testing::PrettyTest;
 using testing::make_test;
 using testing::TestGroup;
+using namespace std::chrono_literals;
 
 
 template<typename T, typename U>
@@ -128,10 +129,10 @@ TestGroup all_tests[] = {
             test.check(std::equal(col.begin(), col.end(), col_true));
         }),
 
-        testing::make_timed_test<testing::PrettyTest>(10.0, "perfomance", [](auto& test){
+        testing::make_timed_test<testing::PrettyTest>(50s, "perfomance", [](auto& test){
             //TODO: extract matrix parsing from here
             constexpr size_t size = 20;
-            SquareMatrix<size, double> test_matrix;
+            SquareMatrix<size> test_matrix;
             SquareMatrix<size, double> correct_result;
             
             std::ifstream input("data/matr.txt");
@@ -147,7 +148,7 @@ TestGroup all_tests[] = {
             auto inv = test_matrix.invert();
 
             for_each_index(size, [&](size_t i, size_t j) {
-                auto diff = std::abs(double(inv[i][j] - correct_result[i][j]));
+                auto diff = std::abs(double(inv[i][j]) - correct_result[i][j]);
                 auto epsilon = 1e-5;
                 test.check(diff < epsilon);
             });

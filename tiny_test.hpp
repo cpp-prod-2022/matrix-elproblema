@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <ctime>
 #include <limits>
+#include <chrono>
 
 #ifdef __has_include
 #  if __has_include(<source_location>)
@@ -41,6 +42,8 @@ constexpr auto type_name() {
 }
 
 namespace testing {
+    using namespace std::chrono_literals;
+
     template<typename T>
     concept Printable = requires(T item) {
         { std::cout << item };
@@ -203,11 +206,11 @@ namespace testing {
 
     template<template<typename> typename ActualTest, typename Functor>
     auto make_timed_test(
-        double time_limit_ms,
+        std::chrono::milliseconds time_limit,
         std::string name,
         Functor f
     ) {
-        return std::make_unique<TimedTest<ActualTest, Functor>>(time_limit_ms, std::move(name), std::move(f));
+        return std::make_unique<TimedTest<ActualTest, Functor>>(double(time_limit.count()), std::move(name), std::move(f));
     }
 
 
