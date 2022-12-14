@@ -13,6 +13,8 @@ using testing::make_test;
 using testing::TestGroup;
 using namespace std::chrono_literals;
 
+//#define LONG_TEST
+
 
 template<typename T, typename U>
 concept CanMultiply = requires(T first, U second) {
@@ -127,9 +129,9 @@ TestGroup all_tests[] = {
             auto&& col = matrix.getColumn(1);
             field_t col_true[] = {2, 5, 8};
             test.check(std::equal(col.begin(), col.end(), col_true));
-        }),
-
-        testing::make_timed_test<testing::PrettyTest>(50s, "perfomance", [](auto& test){
+        })
+#ifdef LONG_TEST
+        , testing::make_timed_test<testing::PrettyTest>("perfomance", [](auto& test){
             //TODO: extract matrix parsing from here
             constexpr size_t size = 20;
             SquareMatrix<size> test_matrix;
@@ -153,6 +155,7 @@ TestGroup all_tests[] = {
                 test.check(diff < epsilon);
             });
         })
+#endif // LONG_TEST
     }
 };
 
