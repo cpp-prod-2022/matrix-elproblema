@@ -5,6 +5,9 @@
 #include <string>
 #include <memory>
 #include <iostream>
+#include <iomanip>
+#include <ctime>
+#include <limits>
 
 #ifdef __has_include
 #  if __has_include(<source_location>)
@@ -43,7 +46,6 @@ namespace testing {
         { std::cout << item };
     };
 
-    
     class Test {
     public:
         Test(std::string name): name_(std::move(name)) {}
@@ -84,14 +86,6 @@ namespace testing {
     private:
         Functor f_;
     };
-
-    template<typename Functor>
-    std::unique_ptr<SimpleTest<Functor>> make_simple_test(
-            std::string name, 
-            Functor f) {
-        return std::make_unique<SimpleTest<Functor>>(std::move(name), std::move(f));
-    }
-
 
     template<typename Functor>
     class PrettyTest: public Test {
@@ -162,12 +156,60 @@ namespace testing {
         bool result = true;
     };
     
-    template<typename Functor>
-    std::unique_ptr<PrettyTest<Functor>> make_pretty_test(
+    template<template<typename> typename ActualTest, typename Functor>
+    std::unique_ptr<PrettyTest<Functor>> make_test(
             std::string name, 
             Functor f) {
-        return std::make_unique<PrettyTest<Functor>>(std::move(name), std::move(f));
+        return std::make_unique<ActualTest<Functor>>(std::move(name), std::move(f));
     }
+
+
+    template<template<typename> typename ActualTest, typename Functor>
+    struct TimedTest : ActualTest<Functor> {
+        using Parent = ActualTest<Functor>;
+        using Parent::Parent;
+
+        template<typename... Args>
+        TimedTest(double milliseconds, Args&&... args) 
+            : Parent(std::forward<Args>(args)...)
+            , max_runtime_(milliseconds) {}
+
+        bool doTest() override {
+            auto start = std::clock();
+            auto result = Parent::doTest();
+            auto finish = std::clock();
+            double execution_ms = double(finish - start) * 1000.0 / CLOCKS_PER_SEC;
+            std::cout << "finished in " << std::setprecision(2) << execution_ms << "ms ";
+            if (max_runtime_ < execution_ms) {
+                std::cout << "(SLOW!)\n";
+                return false;
+            } else {
+                std::cout << "(OK)\n";
+            }
+            return result;
+        }
+
+    private:
+        double max_runtime_ = std::numeric_limits<double>::infinity();
+    };
+
+    template<template<typename> typename ActualTest, typename Functor>
+    auto make_timed_test(
+        std::string name,
+        Functor f
+    ) {
+        return std::make_unique<TimedTest<ActualTest, Functor>>(std::move(name), std::move(f));
+    }
+
+    template<template<typename> typename ActualTest, typename Functor>
+    auto make_timed_test(
+        double time_limit_ms,
+        std::string name,
+        Functor f
+    ) {
+        return std::make_unique<TimedTest<ActualTest, Functor>>(time_limit_ms, std::move(name), std::move(f));
+    }
+
 
     class TestGroup {
     public:

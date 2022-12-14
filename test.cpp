@@ -4,10 +4,12 @@
 #include <array>
 #include <numeric>
 #include <limits>
+#include <fstream>
 #include "tiny_test.hpp"
 #include "matrix.h"
 
-using testing::make_pretty_test;
+using testing::PrettyTest;
+using testing::make_test;
 using testing::TestGroup;
 
 
@@ -38,9 +40,17 @@ concept SubtractionResult = CanSubtract<T, U> && requires(T first, U second) {
     {first - second} -> std::same_as<R>;
 };
 
+void for_each_index(size_t size, const auto& functor) {
+    for (size_t i = 0; i < size; ++i) {
+        for (size_t j = 0; j < size; ++j) {
+            functor(i, j);
+        }
+    }
+}
+
 TestGroup all_tests[] = {
     {"Matrix",
-        make_pretty_test("static checks", [](auto& test) {
+        make_test<PrettyTest>("static checks", [](auto& test) {
             using M12 = Matrix<1, 2, size_t>;
             using M21 = Matrix<2, 1, size_t>;
             using M22 = Matrix<2, 2, size_t>;
@@ -89,7 +99,7 @@ TestGroup all_tests[] = {
             test.check(!CanSubtract<M11, M22>);
         }),
 
-        make_pretty_test("operations", [](auto& test) {
+        make_test<PrettyTest>("operations", [](auto& test) {
             using field_t = int;
             SquareMatrix<3, field_t> matrix = {
                 {1, 2, 3},
@@ -101,11 +111,9 @@ TestGroup all_tests[] = {
             
             {
                 auto transposed = matrix.transposed();
-                for (size_t i = 0; i < 3; ++i) {
-                    for (size_t j = 0; j < 3; ++j) {
-                        test.equals(transposed[i][j], matrix[j][i]);
-                    }
-                }
+                for_each_index(3, [&](size_t i, size_t j) {
+                    test.equals(transposed[i][j], matrix[j][i]);
+                });
             }
             
             test.equals(matrix.rank(),  size_t(2));
@@ -118,6 +126,31 @@ TestGroup all_tests[] = {
             auto&& col = matrix.getColumn(1);
             field_t col_true[] = {2, 5, 8};
             test.check(std::equal(col.begin(), col.end(), col_true));
+        }),
+
+        testing::make_timed_test<testing::PrettyTest>(10.0, "perfomance", [](auto& test){
+            //TODO: extract matrix parsing from here
+            constexpr size_t size = 20;
+            SquareMatrix<size, double> test_matrix;
+            SquareMatrix<size, double> correct_result;
+            
+            std::ifstream input("data/matr.txt");
+
+            auto read_matrix = [&input](auto& matrix) {
+                for_each_index(size, [&](size_t i, size_t j) {
+                    input >> matrix[i][j];
+                });
+            };
+
+            read_matrix(test_matrix);
+            read_matrix(correct_result);
+            auto inv = test_matrix.invert();
+
+            for_each_index(size, [&](size_t i, size_t j) {
+                auto diff = std::abs(double(inv[i][j] - correct_result[i][j]));
+                auto epsilon = 1e-5;
+                test.check(diff < epsilon);
+            });
         })
     }
 };
