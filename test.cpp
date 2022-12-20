@@ -103,7 +103,7 @@ TestGroup all_tests[] = {
         }),
 
         make_test<PrettyTest>("operations", [](auto& test) {
-            using field_t = int;
+            using field_t = Rational;
             SquareMatrix<3, field_t> matrix = {
                 {1, 2, 3},
                 {4, 5, 6},
