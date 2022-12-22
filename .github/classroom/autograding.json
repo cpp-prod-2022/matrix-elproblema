@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "name": "compile run and check codestyle",
+      "setup": "",
+      "run": "./test.sh",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 2,
+      "points": null
+    }
+  ]
+}
