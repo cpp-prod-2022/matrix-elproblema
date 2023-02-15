@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <complex>
 #include <iostream>
@@ -815,19 +816,6 @@ private:
     using vec = std::vector<std::vector<Field>>;    
     using arr = std::array<std::array<Field, N>, M>;
     
-    template<size_t K>
-    std::array<std::array<Field, K>, M> trivial_multiplication(const Matrix<N, K, Field>& to_mul) const {
-        std::array<std::array<Field, K>, M> res;
-        for (size_t i = 0; i < M; ++i) {
-            for (size_t j = 0; j < N; ++j) {
-                for (size_t k = 0; k < K; ++k) {
-                    res[i][k] += m_data[i][j] * to_mul[j][k];
-                }
-            }
-        }
-        return res;
-    }
-    
     Field gauss() {
         Field res(1);
         bool sign = false;
@@ -936,10 +924,7 @@ public:
         return *this;
     }
 
-    Matrix<M, N, Field>& operator *= (const Matrix<N, N, Field>& x) {
-        trivial_multiplication(x);
-        return *this;
-    }
+    Matrix<M, N, Field>& operator *= (const Matrix<N, N, Field>&);
     
     Matrix<M, N, Field>& operator += (const Matrix<M, N, Field>& b) {
         for (size_t i = 0; i < M; ++i) {
@@ -1025,11 +1010,6 @@ Matrix<M, N, Field> operator + (const Matrix<M, N, Field>& a, const Matrix<M, N,
     return copy;
 }
 
-template<size_t M_, size_t N_, size_t K_, typename F>
-Matrix<M_, K_, F> operator * (const Matrix<M_, N_, F>& A, const Matrix<N_, K_, F>& B) {
-    return Matrix<M_, K_, F>(A.trivial_multiplication(B));
-}
-
 template<size_t M, size_t N, typename F>
 Matrix<M, N, F> operator * (F x, Matrix<M, N, F> m) {
     m *= x;
@@ -1039,3 +1019,134 @@ Matrix<M, N, F> operator * (F x, Matrix<M, N, F> m) {
 template<size_t N, typename Field = Rational>
 using SquareMatrix = Matrix<N, N, Field>;
 
+template <typename Field = Rational>
+class Strassen {
+    template<typename T>
+    using vec = std::vector<T>;
+    vec<vec<Field>> A, B;
+public:
+    static const int cut = 1024;
+private:
+    int lg = 0;
+
+    void calc_log() {
+        while (1 << lg < max({A.size(), A[0].size(), B.size(), B[0].size()})) {
+            ++lg;
+        }
+    }
+    
+    void format(vec<vec<Field>> (Strassen::*a)) {
+        vec<vec<Field>>& matrix = this->*a;
+        int m = matrix.size();
+        int n = matrix[0].size();
+        int lg = 0;
+        auto copy = matrix;
+        matrix = vec<vec<Field>>(1 << lg, vec<Field>(1 << lg, Field(0)));
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                matrix[i][j] = copy[i][j];
+            }
+        }
+    }
+
+    void format_all() {
+        format(Strassen::A);
+        format(Strassen::B);
+    }
+
+    static vec<vec<Field>> sum(const vec<vec<Field>>& a, const vec<vec<Field>>& b, bool switch_sign = false) {
+        int m = a.size(), n = a[0].size();
+        vec<vec<Field>> res(m, vec<Field>(n, Field(0)));
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                res[i][j] = a[i][j] + (switch_sign? -b[i][j]: b[i][j]);
+            }
+        }
+        return res;
+    }
+
+    static vec<vec<Field>> sub(const vec<vec<Field>>& a, const vec<vec<Field>>& b) {
+        sum(a, b, true);
+    }
+
+    static vec<vec<vec<vec<Field>>>> split(const vec<vec<Field>>& mat) {
+        int m = mat.size();
+        vec<vec<vec<vec<Field>>>> res(2, vec<vec<vec<Field>>>(2, vec<vec<Field>>(m, vec<Field>(m, Field(0)))));
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < m; ++j) {
+                res[2 * i / m][2 * j / m][i % (m / 2)][j % (m / 2)] = mat[i][j];
+            }
+        }
+        return res;
+    }
+
+    static vec<vec<Field>> merge(const vec<vec<vec<vec<Field>>>>& blocks_2_2) {
+        int m = blocks_2_2[0][0].size() * 2;
+        vec<vec<Field>> res(m);
+        for (int i = 0; i < m / 2; ++i) {
+            for (int j = 0; j < m / 2; ++j) {
+                res[i][j] = blocks_2_2[0][0][i][j];
+                res[i][j + m / 2] = blocks_2_2[0][1][i][j];
+                res[i + m / 2][j] = blocks_2_2[1][0][i][j];
+                res[i + m / 2][j + m / 2] = blocks_2_2[1][1][i][j];
+            }
+        }
+        return res;
+    }
+
+    static vec<vec<Field>> trivial_multiplication(vec<vec<Field>>& a, vec<vec<Field>>& b) {
+        int m = a.size();
+        vec<vec<Field>> res(m, vec<Field>(m, Field(0)));
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < m; ++j) {
+                for (int k = 0; k < m; ++k) {
+                    res[i][k] += a[i][j] * b[j][k];
+                } 
+            }
+        }
+    }
+
+    static vec<vec<Field>> strassen_mul(vec<vec<Field>>& a, vec<vec<Field>>& b) {
+        int m = a.size();
+        if (m < cut) return trivial_multiplication(a, b); 
+        auto s_a = split(a), s_b = split(b);
+        auto d = strassen_mul(sum(s_a[0][0], s_a[1][1]), sum(s_b[0][0], s_b[1][1])); 
+        auto d_1 = strassen_mul(sub(s_a[0][1], s_a[1][1]), sum(s_b[1][0], s_b[1][1])); 
+        auto d_2 = strassen_mul(sub(s_a[1][0], s_a[0][0]), sum(s_b[0][0], s_b[0][1]));
+
+        auto left = strassen_mul(s_a[1][1], sub(s_b[1][0], s_b[0][0]));
+        auto right = strassen_mul(s_a[0][0], sub(s_b[0][1], s_b[1][1]));
+        auto top = strassen_mul(sum(s_a[0][0], s_a[0][1]), s_b[1][1]);
+        auto bottom = strassen_mul(sum(s_a[1][0], s_a[1][1]), s_b[0][0]);
+
+        return merge({{sub(sum(sum(d, d_1), left), top), sum(right, top)}, 
+                    {sum(left, bottom), sub(sum(sum(d, d_2), right), bottom)}});
+    }
+
+    public:
+        
+        Strassen(const vec<vec<Field>>& a, const vec<vec<Field>>& b): A(a), B(b) {
+            format_all();
+        }
+
+        vec<vec<Field>> operator()() {
+            return strassen_mul(A, B);
+        }
+};
+
+template<size_t M_, size_t N_, size_t K_, typename F>
+Matrix<M_, K_, F> operator * (const Matrix<M_, N_, F>& A, const Matrix<N_, K_, F>& B) {
+    auto res = Strassen<F>(A, B)();
+    Matrix<M_, K_, F> matrix;
+    for (size_t i = 0; i < M_; ++i) {
+        for (size_t j = 0; j < K_; ++j) {
+            matrix[i][j] = res[i][j];
+        } 
+    }
+    return matrix;
+}
+
+template<size_t M, size_t N, typename Field>
+Matrix<M, N, Field>& Matrix<M, N, Field>::operator *= (const Matrix<N, N, Field>& to_mul) {
+    *this = *this * to_mul;
+}
